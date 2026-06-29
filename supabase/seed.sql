@@ -1,0 +1,3 @@
+-- Domain data is intentionally represented by the frontend demo fixtures.
+-- After creating local Auth users, promote the founders with:
+-- update public.profiles set role = 'owner' where id = '<auth-user-uuid>';
