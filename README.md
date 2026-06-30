@@ -9,11 +9,18 @@ Back office interno para gestionar clientes, proyectos, tareas y, en los próxim
 - Identidad visual basada en el naranja de marca `#F97415`.
 - Login preparado para Supabase Auth.
 - Dashboard conectado a datos reales de Supabase.
-- Alta de clientes, proyectos y tareas desde la aplicación.
+- CRUD completo de clientes, proyectos y tareas desde la aplicación.
+- Módulo Finanzas implementado para ARS, USD y USDT; su migración remota está pendiente de aplicar.
 - CRM con búsqueda y filtro por estado.
 - Vista de proyectos con kanban y progreso derivado.
 - Layout responsive con permisos visuales por rol.
 - Migración inicial de Supabase con perfiles, roles, clientes, proyectos, tareas, presupuesto restringido y RLS.
+
+La documentación del estado actual se encuentra en:
+
+- [`docs/progreso-proyecto.md`](docs/progreso-proyecto.md): avance general y próximos módulos.
+- [`docs/crud-modules.md`](docs/crud-modules.md): operaciones, permisos y validaciones por módulo.
+- [`docs/finance-module.md`](docs/finance-module.md): alcance y estado de despliegue de Finanzas.
 
 ## Ejecutar localmente
 

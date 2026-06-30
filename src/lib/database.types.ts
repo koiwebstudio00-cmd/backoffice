@@ -29,6 +29,264 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['clients']['Insert']>
         Relationships: []
       }
+      credentials: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          created_by: string
+          id: string
+          key_version: number
+          notes_ciphertext: string | null
+          notes_iv: string | null
+          project_id: string | null
+          secret_ciphertext: string
+          secret_iv: string
+          service_name: string
+          service_url: string | null
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          key_version?: number
+          notes_ciphertext?: string | null
+          notes_iv?: string | null
+          project_id?: string | null
+          secret_ciphertext: string
+          secret_iv: string
+          service_name: string
+          service_url?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['credentials']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'credentials_client_id_fkey'
+            columns: ['client_id']
+            isOneToOne: false
+            referencedRelation: 'clients'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'credentials_project_id_fkey'
+            columns: ['project_id']
+            isOneToOne: false
+            referencedRelation: 'projects'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      credential_access_log: {
+        Row: {
+          accessed_at: string
+          credential_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          accessed_at?: string
+          credential_id: string
+          id?: string
+          user_id: string
+        }
+        Update: Partial<Database['public']['Tables']['credential_access_log']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'credential_access_log_credential_id_fkey'
+            columns: ['credential_id']
+            isOneToOne: false
+            referencedRelation: 'credentials'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      financial_movements: {
+        Row: {
+          amount: number
+          category: string
+          client_id: string | null
+          concept: string
+          created_at: string
+          created_by: string
+          currency: string
+          due_date: string | null
+          id: string
+          notes: string | null
+          occurred_on: string
+          project_id: string | null
+          recurrence: Database['public']['Enums']['financial_recurrence']
+          series_id: string | null
+          settled_on: string | null
+          status: Database['public']['Enums']['financial_movement_status']
+          type: Database['public']['Enums']['financial_movement_type']
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          client_id?: string | null
+          concept: string
+          created_at?: string
+          created_by?: string
+          currency: string
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          occurred_on?: string
+          project_id?: string | null
+          recurrence?: Database['public']['Enums']['financial_recurrence']
+          series_id?: string | null
+          settled_on?: string | null
+          status?: Database['public']['Enums']['financial_movement_status']
+          type: Database['public']['Enums']['financial_movement_type']
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['financial_movements']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'financial_movements_client_id_fkey'
+            columns: ['client_id']
+            isOneToOne: false
+            referencedRelation: 'clients'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'financial_movements_project_id_fkey'
+            columns: ['project_id']
+            isOneToOne: false
+            referencedRelation: 'projects'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      meetings: {
+        Row: {
+          created_at: string
+          created_by: string
+          ends_at: string | null
+          id: string
+          location: string | null
+          notes: string | null
+          starts_at: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          ends_at?: string | null
+          id?: string
+          location?: string | null
+          notes?: string | null
+          starts_at: string
+          title: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['meetings']['Insert']>
+        Relationships: []
+      }
+      meeting_projects: {
+        Row: {
+          meeting_id: string
+          project_id: string
+        }
+        Insert: {
+          meeting_id: string
+          project_id: string
+        }
+        Update: Partial<Database['public']['Tables']['meeting_projects']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'meeting_projects_meeting_id_fkey'
+            columns: ['meeting_id']
+            isOneToOne: false
+            referencedRelation: 'meetings'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'meeting_projects_project_id_fkey'
+            columns: ['project_id']
+            isOneToOne: false
+            referencedRelation: 'projects'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      milestones: {
+        Row: {
+          created_at: string
+          created_by: string
+          done: boolean
+          due_date: string
+          id: string
+          position: number
+          project_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          done?: boolean
+          due_date: string
+          id?: string
+          position?: number
+          project_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['milestones']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'milestones_project_id_fkey'
+            columns: ['project_id']
+            isOneToOne: false
+            referencedRelation: 'projects'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      notes: {
+        Row: {
+          body: string
+          client_id: string | null
+          created_at: string
+          created_by: string
+          id: string
+          project_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          client_id?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          project_id?: string | null
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['notes']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'notes_client_id_fkey'
+            columns: ['client_id']
+            isOneToOne: false
+            referencedRelation: 'clients'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'notes_project_id_fkey'
+            columns: ['project_id']
+            isOneToOne: false
+            referencedRelation: 'projects'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -75,7 +333,7 @@ export type Database = {
       }
       projects: {
         Row: {
-          client_id: string
+          client_id: string | null
           created_at: string
           created_by: string
           deadline: string | null
@@ -87,7 +345,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          client_id: string
+          client_id?: string | null
           created_at?: string
           created_by?: string
           deadline?: string | null
@@ -158,6 +416,9 @@ export type Database = {
     Functions: Record<string, never>
     Enums: {
       client_status: 'lead' | 'active' | 'paused' | 'closed'
+      financial_movement_status: 'pending' | 'settled' | 'cancelled'
+      financial_movement_type: 'income' | 'expense'
+      financial_recurrence: 'none' | 'monthly'
       project_status: 'active' | 'paused' | 'done'
       task_status: 'todo' | 'doing' | 'review' | 'done'
       team_role: 'owner' | 'member'

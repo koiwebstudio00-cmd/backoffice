@@ -13,5 +13,5 @@ export const navigation = [
   { label: 'Proyectos', to: '/proyectos', icon: FolderKanban, ownerOnly: false },
   { label: 'Finanzas', to: '/finanzas', icon: CircleDollarSign, ownerOnly: true },
   { label: 'Calendario', to: '/calendario', icon: CalendarDays, ownerOnly: false },
-  { label: 'Bóveda', to: '/boveda', icon: KeyRound, ownerOnly: true },
+  { label: 'Credenciales', to: '/credenciales', icon: KeyRound, ownerOnly: true },
 ] as const

@@ -5,12 +5,14 @@ import {
   CircleDollarSign,
   Clock3,
   FolderKanban,
+  ListTodo,
   ReceiptText,
   Users,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/auth/auth-context'
+import { CalendarItemRow } from '@/components/CalendarItemRow'
 import { KpiCard } from '@/components/KpiCard'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -19,43 +21,34 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
-import { listClients, listProjects, type ClientRecord, type ProjectRecord } from '@/data/repository'
-import { formatLongDate, formatMoney, formatShortDate } from '@/lib/format'
-
-interface AgendaItem {
-  id: string
-  date: string
-  title: string
-  meta: string
-}
+import { listClients, listFinancialMovements, listMeetings, listProjects, type ClientRecord, type FinancialMovementRecord, type MeetingRecord, type ProjectRecord } from '@/data/repository'
+import { buildCalendarItems, sortCalendarItems } from '@/lib/calendar'
+import { formatLongDate, formatMoney, formatShortDate, todayInArgentina } from '@/lib/format'
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'No pudimos cargar el dashboard.'
 }
 
-function agendaDateParts(date: string): { day: string; month: string } {
-  const parsed = new Date(`${date}T12:00:00`)
-  return {
-    day: new Intl.DateTimeFormat('es-AR', { day: '2-digit' }).format(parsed),
-    month: new Intl.DateTimeFormat('es-AR', { month: 'short' }).format(parsed).replace('.', '').toUpperCase(),
-  }
-}
-
 export function DashboardPage() {
   const { user } = useAuth()
+  const isOwner = user?.role === 'owner'
   const [clients, setClients] = useState<ClientRecord[]>([])
   const [projects, setProjects] = useState<ProjectRecord[]>([])
+  const [meetings, setMeetings] = useState<MeetingRecord[]>([])
+  const [movements, setMovements] = useState<FinancialMovementRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const firstName = user?.fullName.split(' ')[0] ?? 'equipo'
 
   useEffect(() => {
     let cancelled = false
-    void Promise.all([listClients(), listProjects()])
-      .then(([nextClients, nextProjects]) => {
+    void Promise.all([listClients(), listProjects(), listMeetings(), isOwner ? listFinancialMovements() : Promise.resolve<FinancialMovementRecord[]>([])])
+      .then(([nextClients, nextProjects, nextMeetings, nextMovements]) => {
         if (cancelled) return
         setClients(nextClients)
         setProjects(nextProjects)
+        setMeetings(nextMeetings)
+        setMovements(nextMovements)
         setError(null)
       })
       .catch((loadError: unknown) => {
@@ -65,15 +58,20 @@ export function DashboardPage() {
         if (!cancelled) setIsLoading(false)
       })
     return () => { cancelled = true }
-  }, [])
+  }, [isOwner])
 
   const activeProjects = projects.filter((project) => project.status === 'active')
-  const agenda = useMemo<AgendaItem[]>(() => {
-    const projectDeadlines = projects.flatMap((project) => project.deadline ? [{ id: `project-${project.id}`, date: project.deadline, title: `Entrega · ${project.name}`, meta: project.clientName }] : [])
-    const taskDeadlines = projects.flatMap((project) => project.tasks.flatMap((task) => task.dueDate && task.status !== 'done' ? [{ id: `task-${task.id}`, date: task.dueDate, title: task.title, meta: project.name }] : []))
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Tucuman' }).format(new Date())
-    return [...projectDeadlines, ...taskDeadlines].filter((item) => item.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3)
-  }, [projects])
+  const todayItems = useMemo(() => {
+    const today = todayInArgentina()
+    return sortCalendarItems(buildCalendarItems(meetings, projects, movements).filter((item) => item.date === today))
+  }, [meetings, projects, movements])
+
+  const todoTasks = useMemo(() => projects
+    .flatMap((project) => project.tasks
+      .filter((task) => task.status === 'todo')
+      .map((task) => ({ id: task.id, title: task.title, createdAt: task.createdAt, projectId: project.id, projectName: project.name, clientName: project.clientName ?? 'Interno' })))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 5), [projects])
 
   return (
     <div className="space-y-8">
@@ -89,10 +87,10 @@ export function DashboardPage() {
       {error && <Alert variant="destructive"><AlertCircle className="size-4" /><AlertTitle>No se pudo actualizar el resumen</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores principales" aria-busy={isLoading}>
-        <KpiCard label="Clientes activos" value={isLoading ? '…' : String(clients.filter((client) => client.status === 'active').length)} helper={`${clients.length} clientes en total`} icon={Users} tone="green" />
-        <KpiCard label="Proyectos en curso" value={isLoading ? '…' : String(activeProjects.length)} helper={`${activeProjects.filter((project) => project.deadline).length} con deadline`} icon={FolderKanban} tone="blue" />
-        <KpiCard label="Ingresos" value="—" helper="Se habilita con Finanzas" icon={CircleDollarSign} tone="orange" />
-        <KpiCard label="Por cobrar" value="—" helper="Se habilita con cuotas" icon={ReceiptText} tone="plum" />
+        <KpiCard label="Clientes activos" value={isLoading ? '…' : String(clients.filter((client) => client.status === 'active').length)} helper={`${clients.length} clientes en total`} icon={Users} tone="green" to="/clientes" />
+        <KpiCard label="Proyectos en curso" value={isLoading ? '…' : String(activeProjects.length)} helper={`${activeProjects.filter((project) => project.deadline).length} con deadline`} icon={FolderKanban} tone="blue" to="/proyectos" />
+        <KpiCard label="Ingresos" value="—" helper="Se habilita con Finanzas" icon={CircleDollarSign} tone="orange" to="/finanzas" />
+        <KpiCard label="Por cobrar" value="—" helper="Se habilita con cuotas" icon={ReceiptText} tone="plum" to="/finanzas" />
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[1.75fr_0.8fr]">
@@ -118,21 +116,30 @@ export function DashboardPage() {
         </Card>
 
         <Card className="border-border/70 py-0 shadow-none">
-          <CardHeader className="flex flex-row items-center justify-between border-b border-border/70 px-5 py-4"><div><p className="text-[10px] font-semibold tracking-[0.16em] text-primary uppercase">Próximamente</p><CardTitle className="mt-1 text-base">Agenda</CardTitle></div><CalendarClock className="size-5 text-muted-foreground" /></CardHeader>
-          <CardContent className="px-5 py-1">
-            {agenda.map((item) => {
-              const date = agendaDateParts(item.date)
-              return <div className="grid min-h-20 grid-cols-[40px_1fr] items-center gap-3 border-b border-border/60 last:border-0" key={item.id}><time className="text-center" dateTime={item.date}><strong className="block font-mono text-lg leading-none">{date.day}</strong><span className="mt-1 block text-[9px] font-semibold tracking-wider text-primary">{date.month}</span></time><div className="min-w-0 border-l-2 border-primary/70 pl-3"><strong className="block truncate text-xs font-medium">{item.title}</strong><span className="mt-1 block truncate text-[11px] text-muted-foreground">{item.meta}</span></div></div>
-            })}
-            {!isLoading && agenda.length === 0 && <div className="grid min-h-40 place-items-center text-sm text-muted-foreground">No hay deadlines próximos.</div>}
+          <CardHeader className="flex flex-row items-center justify-between border-b border-border/70 px-5 py-4"><div><p className="text-[10px] font-semibold tracking-[0.16em] text-primary uppercase">Agenda</p><CardTitle className="mt-1 text-base">Hoy</CardTitle></div><CalendarClock className="size-5 text-muted-foreground" /></CardHeader>
+          <CardContent className="space-y-1.5 px-5 py-4">
+            {isLoading && <div className="space-y-2"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>}
+            {!isLoading && todayItems.map((item) => <CalendarItemRow item={item} key={item.id} />)}
+            {!isLoading && todayItems.length === 0 && <div className="grid min-h-40 place-items-center text-sm text-muted-foreground">Nada para hoy pa</div>}
           </CardContent>
           <Separator />
-          <Button asChild variant="ghost" className="h-11 w-full rounded-t-none"><Link to="/proyectos">Gestionar deadlines <ArrowRight className="size-3.5" /></Link></Button>
+          <Button asChild variant="ghost" className="h-11 w-full rounded-t-none"><Link to="/calendario">Ver calendario <ArrowRight className="size-3.5" /></Link></Button>
         </Card>
       </div>
 
-      <Card className="border-primary/20 bg-primary/[0.055] py-0 shadow-none">
-        <CardContent className="flex items-center gap-4 p-4"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary"><CircleDollarSign className="size-5" /></div><div className="min-w-0 flex-1"><span className="text-[10px] font-semibold tracking-[0.14em] text-primary uppercase">Próximo módulo</span><strong className="mt-1 block text-sm font-medium">Los indicadores de rentabilidad se activarán cuando incorporemos transacciones reales.</strong></div><Button asChild variant="ghost" className="hidden sm:flex"><Link to="/finanzas">Ver alcance <ArrowRight className="size-4" /></Link></Button></CardContent>
+      <Card className="border-border/70 py-0 shadow-none">
+        <CardHeader className="flex flex-row items-center justify-between border-b border-border/70 px-5 py-4"><div><p className="text-[10px] font-semibold tracking-[0.16em] text-primary uppercase">Pendiente</p><CardTitle className="mt-1 text-base">Últimas tareas por hacer</CardTitle></div><ListTodo className="size-5 text-muted-foreground" /></CardHeader>
+        <CardContent className="px-5 py-1">
+          {isLoading && <div className="space-y-3 py-5"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>}
+          {!isLoading && todoTasks.map((task) => (
+            <Link to={`/proyectos/${task.projectId}`} className="grid min-h-16 grid-cols-[8px_1fr_auto] items-center gap-3 border-b border-border/60 transition-colors last:border-0 hover:bg-muted/40" key={task.id}>
+              <span className="size-2 rounded-full bg-zinc-400" />
+              <div className="min-w-0"><strong className="block truncate text-sm font-medium">{task.title}</strong><span className="mt-0.5 block truncate text-xs text-muted-foreground">{task.projectName} · {task.clientName}</span></div>
+              <ArrowRight className="size-4 text-muted-foreground" />
+            </Link>
+          ))}
+          {!isLoading && todoTasks.length === 0 && <div className="grid min-h-32 place-items-center text-sm text-muted-foreground">No hay tareas por hacer.</div>}
+        </CardContent>
       </Card>
     </div>
   )

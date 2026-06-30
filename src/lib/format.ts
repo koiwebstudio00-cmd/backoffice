@@ -1,6 +1,21 @@
 import type { Currency } from '../data/repository'
 
+export function todayInArgentina(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Argentina/Tucuman',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
+
 export function formatMoney(amount: number, currency: Currency): string {
+  if (currency === 'USDT') {
+    return `USDT ${new Intl.NumberFormat('es-AR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 8,
+    }).format(amount)}`
+  }
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency,

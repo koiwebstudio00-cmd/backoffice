@@ -1,18 +1,32 @@
-import { AlertCircle, Building2, Mail, Plus, Search } from 'lucide-react'
+import { AlertCircle, ArrowUpRight, Building2, Mail, MoreHorizontal, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusBadge } from '@/components/StatusBadge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
-import { createClient, listClients, type ClientRecord, type ClientStatus } from '@/data/repository'
+import { useAuth } from '@/auth/auth-context'
+import { createClient, deleteClient, listClients, updateClient, type ClientRecord, type ClientStatus } from '@/data/repository'
+import { getErrorCode, getErrorMessage } from '@/lib/errors'
 import { formatDateTime } from '@/lib/format'
 
 type StatusFilter = 'all' | ClientStatus
@@ -21,18 +35,30 @@ const initialForm = {
   name: '', company: '', email: '', phone: '', notes: '', status: 'lead' as ClientStatus,
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'No pudimos completar la operación.'
+function clientToForm(client: ClientRecord) {
+  return {
+    name: client.name,
+    company: client.company ?? '',
+    email: client.email ?? '',
+    phone: client.phone ?? '',
+    notes: client.notes ?? '',
+    status: client.status,
+  }
 }
 
 export function ClientsPage() {
+  const { user } = useAuth()
   const [clients, setClients] = useState<ClientRecord[]>([])
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [editingClient, setEditingClient] = useState<ClientRecord | null>(null)
+  const [clientPendingDelete, setClientPendingDelete] = useState<ClientRecord | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [form, setForm] = useState(initialForm)
 
   const loadData = useCallback(async () => {
@@ -69,40 +95,92 @@ export function ClientsPage() {
     })
   }, [clients, query, status])
 
+  function openCreateForm() {
+    setEditingClient(null)
+    setForm(initialForm)
+    setFormError(null)
+    setIsFormOpen(true)
+  }
+
+  function openEditForm(client: ClientRecord) {
+    setEditingClient(client)
+    setForm(clientToForm(client))
+    setFormError(null)
+    setIsFormOpen(true)
+  }
+
+  function handleFormOpenChange(open: boolean) {
+    setIsFormOpen(open)
+    if (!open) {
+      setEditingClient(null)
+      setForm(initialForm)
+      setFormError(null)
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setIsSaving(true)
-    setError(null)
+    setFormError(null)
     try {
-      await createClient(form)
-      setForm(initialForm)
-      setIsFormOpen(false)
+      if (editingClient) await updateClient(editingClient.id, form)
+      else await createClient(form)
+      handleFormOpenChange(false)
       await loadData()
     } catch (saveError) {
-      setError(getErrorMessage(saveError))
+      setFormError(getErrorMessage(saveError))
     } finally {
       setIsSaving(false)
     }
   }
 
+  async function handleDelete() {
+    if (!clientPendingDelete) return
+    setIsDeleting(true)
+    setError(null)
+    try {
+      await deleteClient(clientPendingDelete.id)
+      setClientPendingDelete(null)
+      await loadData()
+    } catch (deleteError) {
+      setError(getErrorCode(deleteError) === '23503'
+        ? 'No podés eliminar este cliente porque tiene proyectos asociados. Eliminá o reasigná esos proyectos primero.'
+        : getErrorMessage(deleteError))
+      setClientPendingDelete(null)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <div className="space-y-8">
-      <PageHeader eyebrow="CRM" title="Clientes" description="Relaciones, contactos y proyectos en un solo lugar." action={<Button onClick={() => setIsFormOpen(true)}><Plus className="size-4" /> Nuevo cliente</Button>} />
+      <PageHeader eyebrow="CRM" title="Clientes" description="Relaciones, contactos y proyectos en un solo lugar." action={<Button onClick={openCreateForm}><Plus className="size-4" /> Nuevo cliente</Button>} />
 
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+      <Dialog open={isFormOpen} onOpenChange={handleFormOpenChange}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader><DialogTitle>Agregar cliente</DialogTitle><DialogDescription>Creá la ficha base; después vas a poder asociarle proyectos.</DialogDescription></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{editingClient ? 'Editar cliente' : 'Agregar cliente'}</DialogTitle>
+            <DialogDescription>{editingClient ? 'Actualizá los datos comerciales y de contacto.' : 'Creá la ficha base; después vas a poder asociarle proyectos.'}</DialogDescription>
+          </DialogHeader>
           <form className="grid gap-4 pt-2 sm:grid-cols-2" onSubmit={handleSubmit}>
+            {formError && <Alert className="sm:col-span-2" variant="destructive"><AlertCircle className="size-4" /><AlertDescription>{formError}</AlertDescription></Alert>}
             <div className="grid gap-2"><Label htmlFor="client-name">Nombre *</Label><Input id="client-name" required maxLength={120} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></div>
             <div className="grid gap-2"><Label htmlFor="client-company">Empresa</Label><Input id="client-company" maxLength={120} value={form.company} onChange={(event) => setForm({ ...form, company: event.target.value })} /></div>
             <div className="grid gap-2"><Label htmlFor="client-email">Email</Label><Input id="client-email" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></div>
             <div className="grid gap-2"><Label htmlFor="client-phone">Teléfono</Label><Input id="client-phone" type="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></div>
             <div className="grid gap-2"><Label>Estado</Label><Select value={form.status} onValueChange={(value) => setForm({ ...form, status: value as ClientStatus })}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="lead">Prospecto</SelectItem><SelectItem value="active">Activo</SelectItem><SelectItem value="paused">Pausado</SelectItem><SelectItem value="closed">Cerrado</SelectItem></SelectContent></Select></div>
             <div className="grid gap-2 sm:col-span-2"><Label htmlFor="client-notes">Notas</Label><Textarea id="client-notes" rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></div>
-            <div className="flex flex-col-reverse gap-2 sm:col-span-2 sm:flex-row sm:justify-end"><Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Cancelar</Button><Button type="submit" disabled={isSaving}>{isSaving ? 'Guardando…' : 'Guardar cliente'}</Button></div>
+            <div className="flex flex-col-reverse gap-2 sm:col-span-2 sm:flex-row sm:justify-end"><Button type="button" variant="outline" onClick={() => handleFormOpenChange(false)}>Cancelar</Button><Button type="submit" disabled={isSaving}>{isSaving ? 'Guardando…' : editingClient ? 'Guardar cambios' : 'Guardar cliente'}</Button></div>
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={Boolean(clientPendingDelete)} onOpenChange={(open) => { if (!open && !isDeleting) setClientPendingDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>¿Eliminar a {clientPendingDelete?.name}?</AlertDialogTitle><AlertDialogDescription>Esta acción no se puede deshacer. Si el cliente tiene proyectos asociados, el sistema impedirá la eliminación para proteger la información.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel><AlertDialogAction disabled={isDeleting} onClick={(event) => { event.preventDefault(); void handleDelete() }}>{isDeleting ? 'Eliminando…' : 'Eliminar cliente'}</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {error && <Alert variant="destructive"><AlertCircle className="size-4" /><AlertTitle>No se pudo completar la operación</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
 
@@ -122,9 +200,9 @@ export function ClientsPage() {
         </div>
 
         {isLoading && <div className="space-y-3 p-5"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>}
-        {!isLoading && filteredClients.length > 0 && <Table><TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Contacto</TableHead><TableHead>Estado</TableHead><TableHead>Proyectos</TableHead><TableHead>Última actividad</TableHead></TableRow></TableHeader><TableBody>{filteredClients.map((client) => { const identity = client.company || client.name; return <TableRow key={client.id}><TableCell><div className="flex min-w-44 items-center gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-[10px] font-bold text-primary">{identity.slice(0, 2).toUpperCase()}</span><div><strong className="text-sm font-medium">{client.name}</strong><small className="mt-1 flex items-center gap-1 text-xs text-muted-foreground"><Building2 className="size-3" /> {client.company || 'Sin empresa'}</small></div></div></TableCell><TableCell>{client.email ? <a className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary" href={`mailto:${client.email}`}><Mail className="size-3.5" /> {client.email}</a> : <span className="text-xs text-muted-foreground">Sin email</span>}</TableCell><TableCell><StatusBadge status={client.status} /></TableCell><TableCell className="font-mono text-xs">{client.projectsCount}</TableCell><TableCell className="text-xs text-muted-foreground">{formatDateTime(client.updatedAt)}</TableCell></TableRow> })}</TableBody></Table>}
+        {!isLoading && filteredClients.length > 0 && <Table><TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Contacto</TableHead><TableHead>Estado</TableHead><TableHead>Proyectos</TableHead><TableHead>Última actividad</TableHead><TableHead className="w-12"><span className="sr-only">Acciones</span></TableHead></TableRow></TableHeader><TableBody>{filteredClients.map((client) => { const identity = client.company || client.name; return <TableRow key={client.id}><TableCell><div className="flex min-w-44 items-center gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-[10px] font-bold text-primary">{identity.slice(0, 2).toUpperCase()}</span><div><Link to={`/clientes/${client.id}`} className="text-sm font-medium hover:text-primary hover:underline">{client.name}</Link><small className="mt-1 flex items-center gap-1 text-xs text-muted-foreground"><Building2 className="size-3" /> {client.company || 'Sin empresa'}</small></div></div></TableCell><TableCell>{client.email ? <a className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary" href={`mailto:${client.email}`}><Mail className="size-3.5" /> {client.email}</a> : <span className="text-xs text-muted-foreground">Sin email</span>}</TableCell><TableCell><StatusBadge status={client.status} /></TableCell><TableCell className="font-mono text-xs">{client.projectsCount}</TableCell><TableCell className="text-xs text-muted-foreground">{formatDateTime(client.updatedAt)}</TableCell><TableCell><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={`Acciones para ${client.name}`}><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem asChild><Link to={`/clientes/${client.id}`}><ArrowUpRight /> Ver ficha</Link></DropdownMenuItem><DropdownMenuItem onSelect={() => openEditForm(client)}><Pencil /> Editar</DropdownMenuItem>{user?.role === 'owner' && <DropdownMenuItem variant="destructive" onSelect={() => setClientPendingDelete(client)}><Trash2 /> Eliminar</DropdownMenuItem>}</DropdownMenuContent></DropdownMenu></TableCell></TableRow> })}</TableBody></Table>}
 
-        {!isLoading && filteredClients.length === 0 && <div className="grid min-h-56 place-items-center p-6 text-center"><div><Search className="mx-auto mb-3 size-5 text-muted-foreground" /><strong className="block text-sm">{clients.length === 0 ? 'Todavía no hay clientes' : 'No encontramos clientes'}</strong><span className="mt-1 block text-xs text-muted-foreground">{clients.length === 0 ? 'Creá el primero para empezar a trabajar con datos reales.' : 'Probá con otro término o estado.'}</span>{clients.length === 0 && <Button className="mt-4" size="sm" onClick={() => setIsFormOpen(true)}><Plus className="size-4" /> Nuevo cliente</Button>}</div></div>}
+        {!isLoading && filteredClients.length === 0 && <div className="grid min-h-56 place-items-center p-6 text-center"><div><Search className="mx-auto mb-3 size-5 text-muted-foreground" /><strong className="block text-sm">{clients.length === 0 ? 'Todavía no hay clientes' : 'No encontramos clientes'}</strong><span className="mt-1 block text-xs text-muted-foreground">{clients.length === 0 ? 'Creá el primero para empezar a trabajar con datos reales.' : 'Probá con otro término o estado.'}</span>{clients.length === 0 && <Button className="mt-4" size="sm" onClick={openCreateForm}><Plus className="size-4" /> Nuevo cliente</Button>}</div></div>}
       </Card>
     </div>
   )
