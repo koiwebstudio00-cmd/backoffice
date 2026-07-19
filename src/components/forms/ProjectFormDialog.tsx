@@ -58,11 +58,12 @@ export function ProjectFormDialog({
     setIsSaving(true)
     setError(null)
     try {
+      const hasBudget = isOwner && form.budget.trim() !== ''
       const input = {
         ...form,
         clientId: form.clientId || undefined,
-        budget: isOwner ? Number(form.budget) : undefined,
-        currency: isOwner ? form.currency : undefined,
+        budget: hasBudget ? Number(form.budget) : undefined,
+        currency: hasBudget ? form.currency : undefined,
       }
       if (editingProject) await updateProject(editingProject.id, input)
       else await createProject(input)

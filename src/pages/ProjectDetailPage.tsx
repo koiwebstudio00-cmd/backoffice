@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '@/auth/auth-context'
 import { CredentialsPanel } from '@/components/CredentialsPanel'
+import { EnvFilesPanel } from '@/components/EnvFilesPanel'
 import { MilestoneSection } from '@/components/MilestoneSection'
 import { NotesPanel } from '@/components/NotesPanel'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -223,6 +224,7 @@ export function ProjectDetailPage() {
           {isOwner && <TabsTrigger value="pagos">Pagos</TabsTrigger>}
           <TabsTrigger value="notas">Notas</TabsTrigger>
           {isOwner && <TabsTrigger value="credenciales">Credenciales</TabsTrigger>}
+          {isOwner && <TabsTrigger value="env">Variables de entorno</TabsTrigger>}
         </TabsList>
 
         {/* RESUMEN */}
@@ -350,6 +352,13 @@ export function ProjectDetailPage() {
         {isOwner && (
           <TabsContent value="credenciales">
             <CredentialsPanel clientId={project.clientId ?? undefined} projectId={project.id} userEmail={user?.email ?? ''} />
+          </TabsContent>
+        )}
+
+        {/* VARIABLES DE ENTORNO */}
+        {isOwner && (
+          <TabsContent value="env">
+            <EnvFilesPanel projectId={project.id} userEmail={user?.email ?? ''} />
           </TabsContent>
         )}
       </Tabs>

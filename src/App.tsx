@@ -13,6 +13,8 @@ const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage').then((m
 const FinancePage = lazy(() => import('./pages/FinancePage').then((module) => ({ default: module.FinancePage })))
 const CalendarPage = lazy(() => import('./pages/CalendarPage').then((module) => ({ default: module.CalendarPage })))
 const CredentialsPage = lazy(() => import('./pages/CredentialsPage').then((module) => ({ default: module.CredentialsPage })))
+const FeaturesPage = lazy(() => import('./pages/FeaturesPage').then((module) => ({ default: module.FeaturesPage })))
+const PortalPage = lazy(() => import('./pages/PortalPage').then((module) => ({ default: module.PortalPage })))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })))
 
 function RouteFallback() {
@@ -26,6 +28,7 @@ export function App() {
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/portal/:token" element={<PortalPage />} />
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
                 <Route index element={<DashboardPage />} />
@@ -36,6 +39,7 @@ export function App() {
                 <Route path="finanzas" element={<FinancePage />} />
                 <Route path="calendario" element={<CalendarPage />} />
                 <Route path="credenciales" element={<CredentialsPage />} />
+                <Route path="features" element={<FeaturesPage />} />
               </Route>
             </Route>
             <Route path="*" element={<NotFoundPage />} />

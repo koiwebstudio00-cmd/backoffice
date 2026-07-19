@@ -117,6 +117,7 @@ export type Database = {
           id: string
           notes: string | null
           occurred_on: string
+          payment_method: Database['public']['Enums']['financial_payment_method'] | null
           project_id: string | null
           recurrence: Database['public']['Enums']['financial_recurrence']
           series_id: string | null
@@ -137,6 +138,7 @@ export type Database = {
           id?: string
           notes?: string | null
           occurred_on?: string
+          payment_method?: Database['public']['Enums']['financial_payment_method'] | null
           project_id?: string | null
           recurrence?: Database['public']['Enums']['financial_recurrence']
           series_id?: string | null
@@ -401,6 +403,144 @@ export type Database = {
           },
         ]
       }
+      client_portal_tokens: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string
+          id: string
+          last_accessed_at: string | null
+          revoked_at: string | null
+          token_hash: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          last_accessed_at?: string | null
+          revoked_at?: string | null
+          token_hash: string
+        }
+        Update: Partial<Database['public']['Tables']['client_portal_tokens']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'client_portal_tokens_client_id_fkey'
+            columns: ['client_id']
+            isOneToOne: false
+            referencedRelation: 'clients'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      project_env_files: {
+        Row: {
+          content_ciphertext: string
+          content_iv: string
+          created_at: string
+          created_by: string
+          id: string
+          key_version: number
+          name: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          content_ciphertext: string
+          content_iv: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          key_version?: number
+          name: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['project_env_files']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'project_env_files_project_id_fkey'
+            columns: ['project_id']
+            isOneToOne: false
+            referencedRelation: 'projects'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      env_file_access_log: {
+        Row: {
+          accessed_at: string
+          env_file_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          accessed_at?: string
+          env_file_id: string
+          id?: string
+          user_id: string
+        }
+        Update: Partial<Database['public']['Tables']['env_file_access_log']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'env_file_access_log_env_file_id_fkey'
+            columns: ['env_file_id']
+            isOneToOne: false
+            referencedRelation: 'project_env_files'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      feature_requests: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          status: Database['public']['Enums']['feature_request_status']
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          status?: Database['public']['Enums']['feature_request_status']
+          title: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['feature_requests']['Insert']>
+        Relationships: []
+      }
+      feature_request_comments: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string
+          feature_request_id: string
+          id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string
+          feature_request_id: string
+          id?: string
+        }
+        Update: Partial<
+          Database['public']['Tables']['feature_request_comments']['Insert']
+        >
+        Relationships: [
+          {
+            foreignKeyName: 'feature_request_comments_feature_request_id_fkey'
+            columns: ['feature_request_id']
+            isOneToOne: false
+            referencedRelation: 'feature_requests'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: {
       project_progress: {
@@ -416,7 +556,14 @@ export type Database = {
     Functions: Record<string, never>
     Enums: {
       client_status: 'lead' | 'active' | 'paused' | 'closed'
+      feature_request_status:
+        | 'proposed'
+        | 'accepted'
+        | 'in_progress'
+        | 'done'
+        | 'rejected'
       financial_movement_status: 'pending' | 'settled' | 'cancelled'
+      financial_payment_method: 'transfer' | 'crypto' | 'cash' | 'card' | 'other'
       financial_movement_type: 'income' | 'expense'
       financial_recurrence: 'none' | 'monthly'
       project_status: 'active' | 'paused' | 'done'

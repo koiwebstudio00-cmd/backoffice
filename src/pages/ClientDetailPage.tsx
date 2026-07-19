@@ -6,6 +6,7 @@ import {
   Building2,
   CalendarClock,
   FolderKanban,
+  Globe,
   ListTodo,
   Mail,
   Pencil,
@@ -19,6 +20,7 @@ import { useAuth } from '@/auth/auth-context'
 import { CredentialsPanel } from '@/components/CredentialsPanel'
 import { MilestoneSection } from '@/components/MilestoneSection'
 import { NotesPanel } from '@/components/NotesPanel'
+import { PortalAccessDialog } from '@/components/PortalAccessDialog'
 import { StatusBadge } from '@/components/StatusBadge'
 import { MovementFormDialog } from '@/components/forms/MovementFormDialog'
 import { ProjectFormDialog } from '@/components/forms/ProjectFormDialog'
@@ -85,6 +87,7 @@ export function ClientDetailPage() {
   const [projectDialog, setProjectDialog] = useState<{ project: ProjectRecord | null } | null>(null)
   const [movementDialog, setMovementDialog] = useState<{ movement: FinancialMovementRecord | null } | null>(null)
   const [taskDialog, setTaskDialog] = useState<{ task: ClientTaskRecord | null } | null>(null)
+  const [isPortalOpen, setIsPortalOpen] = useState(false)
 
   const loadAll = useCallback(async () => {
     const [nextProjects, nextTasks, nextNotes, nextMovements] = await Promise.all([
@@ -196,7 +199,14 @@ export function ClientDetailPage() {
             </div>
           </div>
         </div>
+        {isOwner && (
+          <Button variant="outline" className="w-fit" onClick={() => setIsPortalOpen(true)}><Globe className="size-4" /> Portal del cliente</Button>
+        )}
       </header>
+
+      {isOwner && (
+        <PortalAccessDialog open={isPortalOpen} onOpenChange={setIsPortalOpen} clientId={client.id} clientName={identity} />
+      )}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Resumen del cliente">
         <MetricCard label="Proyectos" value={String(projects.length)} hint={`${metrics.activeProjects} activos`} />

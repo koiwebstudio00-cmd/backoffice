@@ -1,6 +1,6 @@
 # Progreso del proyecto — Koi Office
 
-Última actualización: 29 de junio de 2026.
+Última actualización: 18 de julio de 2026.
 
 ## Estado general
 
@@ -131,6 +131,30 @@ El Calendario está implementado en su primera versión interna: reuniones propi
 - Migración `20260629200357_finance_module.sql` aplicada en el proyecto remoto y alta de movimientos validada contra la base real.
 - Corregido un bug en el campo Importe del formulario: el `min` y el `step` del input numérico eran incompatibles (`min="0.00000001"` con `step="0.01"`), por lo que el navegador rechazaba importes normales como 1500. Ahora `min` y `step` coinciden según la moneda (0.01 para ARS/USD, 0.00000001 para USDT).
 
+### Pedidos de features (Incremento 1.1)
+
+- Página `features`, visible para todo el equipo, para proponer mejoras al propio sistema.
+- Pedidos con título, descripción, autor y estado (`proposed`, `accepted`, `in_progress`, `done`, `rejected`); el estado lo cambia solo `owner` (UI + trigger en la base).
+- Comentarios por pedido con autor y fecha; eliminación de comentarios para el autor o un `owner`.
+- El autor edita su pedido; eliminación de pedidos solo `owner` con confirmación.
+- Migración `20260718120000_feature_requests.sql` creada; **pendiente de aplicar en el proyecto remoto**.
+
+### Archivos .env por proyecto (Incremento 1.1)
+
+- Pestaña "Variables de entorno" en la página del proyecto, exclusiva de `owner`.
+- Varios archivos por proyecto (nombre único por proyecto, ej. `.env`, `.env.production`); el contenido completo se cifra como blob con AES-256-GCM en Edge Functions, mismo modelo Opción A de la bóveda.
+- Reveal gate idéntico al de credenciales (re-validación con ventana de 5 minutos); el contenido se muestra 60 segundos con copiar y cada reveal queda en `env_file_access_log`.
+- Edge Functions `save-env-file` y `reveal-env-file` (autocontenidas, comparten la `MASTER_ENCRYPTION_KEY`); **pendientes de desplegar**, junto con la migración `20260718121000_project_env_files.sql`.
+
+### Portal público de clientes (Incremento 1.1)
+
+- Página pública `/portal/:token` de solo lectura, fuera del layout autenticado: proyectos con avance derivado e hitos, pagos hechos y futuros mostrando **solo fecha, método de pago, moneda y estado (nunca importes)**, y las notas del cliente completas.
+- Acceso por link portador: token aleatorio de 32 bytes cuyo **hash SHA-256** es lo único que se guarda; el link se muestra una sola vez al generarlo. Un token activo por cliente.
+- Gestión desde la ficha del cliente (solo `owner`): botón "Portal del cliente" con activar, desactivar y regenerar link, estado del token y fecha de último acceso.
+- Edge Function `get-client-portal` (único punto de entrada anónimo): valida el hash, responde igual ante token inexistente o revocado, registra `last_accessed_at` y devuelve el payload curado con `service_role` interno. El portal nunca consulta las tablas directamente.
+- Campo nuevo `payment_method` (`transfer`/`crypto`/`cash`/`card`/`other`) en movimientos, editable desde el formulario de Finanzas.
+- Migración `20260718130000_client_portal.sql` y la función **pendientes de aplicar/desplegar en el proyecto remoto**.
+
 ## Base de datos
 
 El esquema, repartido en tres migraciones, incluye:
@@ -155,6 +179,12 @@ Migraciones aplicadas en el proyecto remoto:
 - `20260630002807_meetings.sql`: reuniones y su tabla puente `meeting_projects` (muchos-a-muchos con proyectos), con RLS de equipo y eliminación solo `owner`.
 - `20260630022302_credentials.sql`: bóveda de credenciales (`credentials` con ciphertext/iv/key_version y `credential_access_log`), con RLS exclusiva de `owner`.
 - `20260630041034_internal_projects.sql`: `client_id` opcional en `projects`, `notes` y `credentials` (proyectos internos del estudio), con checks de anclaje y triggers de validación que admiten proyectos sin cliente.
+
+Migraciones creadas, pendientes de aplicar en el proyecto remoto:
+
+- `20260718120000_feature_requests.sql`: pedidos de features (`feature_requests` + `feature_request_comments`), con trigger que restringe el cambio de estado a `owner`.
+- `20260718121000_project_env_files.sql`: archivos .env cifrados (`project_env_files` + `env_file_access_log`), con RLS exclusiva de `owner`.
+- `20260718130000_client_portal.sql`: portal de clientes (`client_portal_tokens` con hash de token e índice único parcial de un token activo por cliente) y columna `payment_method` en `financial_movements`.
 
 ## Documentación disponible
 
@@ -187,4 +217,6 @@ El build es correcto. Existe una advertencia no bloqueante por el tamaño del bu
 
 Los cinco módulos centrales (Clientes, Proyectos, Finanzas, Calendario y Bóveda) están implementados y desplegados, con todas las migraciones aplicadas en el proyecto remoto y la Bóveda funcionando de punta a punta.
 
-Los incrementos que quedan son opcionales: la sincronización del Calendario con Google Calendar, la rotación automática de la llave maestra y la consolidación multi-moneda de Finanzas.
+El Incremento 1.1 completo (Features, Archivos .env y Portal de clientes) está implementado en código. Para dejarlo operativo falta: aplicar las tres migraciones nuevas (`supabase db push`) y desplegar las Edge Functions `save-env-file`, `reveal-env-file` y `get-client-portal` (`supabase functions deploy`).
+
+Los incrementos restantes son opcionales: la sincronización del Calendario con Google Calendar, la rotación automática de la llave maestra y la consolidación multi-moneda de Finanzas.

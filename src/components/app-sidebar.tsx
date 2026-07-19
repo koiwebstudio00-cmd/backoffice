@@ -1,4 +1,4 @@
-import { FolderKanban, LayoutDashboard, Settings2 } from 'lucide-react'
+import { FolderKanban, LayoutDashboard, Settings2, Wrench } from 'lucide-react'
 import type { TeamUser } from '@/auth/auth-context'
 import { NavMain, type NavMainItem } from '@/components/nav-main'
 import { NavUser } from '@/components/nav-user'
@@ -42,6 +42,15 @@ export function AppSidebar({ user, onSignOut, ...props }: AppSidebarProps) {
       ],
     })
   }
+
+  items.push({
+    title: 'Backoffice',
+    url: '/features',
+    icon: Wrench,
+    items: [
+      { title: 'Features', url: '/features' },
+    ],
+  })
 
   return (
     <Sidebar collapsible="icon" {...props}>

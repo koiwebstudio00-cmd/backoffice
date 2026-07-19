@@ -16,12 +16,21 @@ import {
   type FinancialMovementRecurrence,
   type FinancialMovementStatus,
   type FinancialMovementType,
+  type FinancialPaymentMethod,
   type FinancialProjectOption,
 } from '@/data/repository'
 import { getErrorMessage } from '@/lib/errors'
 import { todayInArgentina } from '@/lib/format'
 
 const currencies = ['ARS', 'USD', 'USDT'] as const
+
+const paymentMethods: { value: FinancialPaymentMethod; label: string }[] = [
+  { value: 'transfer', label: 'Transferencia' },
+  { value: 'crypto', label: 'Crypto' },
+  { value: 'cash', label: 'Efectivo' },
+  { value: 'card', label: 'Tarjeta' },
+  { value: 'other', label: 'Otro' },
+]
 
 function parseAmount(raw: string): number | null {
   const normalized = raw.trim().replace(/\s/g, '').replace(',', '.')
@@ -45,6 +54,7 @@ function emptyForm(lockedClientId?: string, lockedProjectId?: string) {
     clientId: lockedClientId ?? '',
     projectId: lockedProjectId ?? '',
     notes: '',
+    paymentMethod: '' as FinancialPaymentMethod | '',
     recurrence: 'none' as FinancialMovementRecurrence,
   }
 }
@@ -63,6 +73,7 @@ function movementToForm(movement: FinancialMovementRecord) {
     clientId: movement.clientId ?? '',
     projectId: movement.projectId ?? '',
     notes: movement.notes ?? '',
+    paymentMethod: movement.paymentMethod ?? ('' as FinancialPaymentMethod | ''),
     recurrence: movement.recurrence,
   }
 }
@@ -123,7 +134,7 @@ export function MovementFormDialog({
         setError('Ingresá un importe válido mayor a cero. Podés usar coma o punto para los decimales.')
         return
       }
-      const input = { ...form, amount }
+      const input = { ...form, amount, paymentMethod: form.paymentMethod || undefined }
       if (editingMovement) await updateFinancialMovement(editingMovement.id, input)
       else await createFinancialMovement(input)
       onOpenChange(false)
@@ -152,6 +163,7 @@ export function MovementFormDialog({
           <div className="grid gap-2"><Label htmlFor="finance-date">Fecha *</Label><Input id="finance-date" required type="date" value={form.occurredOn} onChange={(event) => setForm({ ...form, occurredOn: event.target.value })} /></div>
           <div className="grid gap-2"><Label htmlFor="finance-due">Vencimiento</Label><Input id="finance-due" type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })} /></div>
           {form.status === 'settled' && <div className="grid gap-2"><Label htmlFor="finance-settled">Fecha de {form.type === 'income' ? 'cobro' : 'pago'} *</Label><Input id="finance-settled" required type="date" value={form.settledOn} onChange={(event) => setForm({ ...form, settledOn: event.target.value })} /></div>}
+          <div className="grid gap-2"><Label>Método de pago</Label><Select value={form.paymentMethod || 'none'} onValueChange={(value) => setForm({ ...form, paymentMethod: value === 'none' ? '' : (value as FinancialPaymentMethod) })}><SelectTrigger className="w-full" aria-label="Método de pago"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Sin especificar</SelectItem>{paymentMethods.map((method) => <SelectItem value={method.value} key={method.value}>{method.label}</SelectItem>)}</SelectContent></Select></div>
           <div className="grid gap-2"><Label>Cliente</Label><Select disabled={Boolean(lockedClientId)} value={form.clientId || 'none'} onValueChange={(value) => handleClientChange(value === 'none' ? '' : value)}><SelectTrigger className="w-full" aria-label="Cliente asociado"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Sin cliente</SelectItem>{clients.map((client) => <SelectItem value={client.id} key={client.id}>{client.name}</SelectItem>)}</SelectContent></Select></div>
           <div className="grid gap-2 sm:col-span-2"><Label>Proyecto</Label><Select disabled={Boolean(lockedProjectId)} value={form.projectId || 'none'} onValueChange={(value) => handleProjectChange(value === 'none' ? '' : value)}><SelectTrigger className="w-full" aria-label="Proyecto asociado"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Sin proyecto</SelectItem>{visibleProjects.map((project) => <SelectItem value={project.id} key={project.id}>{project.name}</SelectItem>)}</SelectContent></Select></div>
           <div className="flex items-start gap-2.5 rounded-lg border border-border/70 bg-muted/30 p-3 sm:col-span-2 lg:col-span-4">

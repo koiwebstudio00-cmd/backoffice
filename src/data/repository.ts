@@ -7,6 +7,7 @@ export type TaskStatus = Enums<'task_status'>
 export type FinancialMovementStatus = Enums<'financial_movement_status'>
 export type FinancialMovementType = Enums<'financial_movement_type'>
 export type FinancialMovementRecurrence = Enums<'financial_recurrence'>
+export type FinancialPaymentMethod = Enums<'financial_payment_method'>
 export type Currency = 'ARS' | 'USD' | 'USDT'
 
 export interface ClientRecord {
@@ -79,6 +80,7 @@ export interface FinancialMovementRecord {
   projectId: string | null
   projectName: string | null
   notes: string | null
+  paymentMethod: FinancialPaymentMethod | null
   recurrence: FinancialMovementRecurrence
   seriesId: string | null
   updatedAt: string
@@ -172,6 +174,7 @@ interface RawFinancialMovement {
   client_id: string | null
   project_id: string | null
   notes: string | null
+  payment_method: FinancialPaymentMethod | null
   recurrence: FinancialMovementRecurrence
   series_id: string | null
   updated_at: string
@@ -219,6 +222,7 @@ export interface CreateFinancialMovementInput {
   clientId?: string
   projectId?: string
   notes?: string
+  paymentMethod?: FinancialPaymentMethod
   recurrence: FinancialMovementRecurrence
 }
 
@@ -454,7 +458,12 @@ export async function updateProject(projectId: string, input: CreateProjectInput
     .single()
 
   if (projectError) throw projectError
-  if (input.budget === undefined || input.currency === undefined) return
+
+  if (input.budget === undefined || input.currency === undefined) {
+    const { error: clearError } = await client.from('project_financials').delete().eq('project_id', projectId)
+    if (clearError) throw clearError
+    return
+  }
 
   const { error: financialError } = await client
     .from('project_financials')
@@ -540,6 +549,7 @@ const movementSelect = `
   client_id,
   project_id,
   notes,
+  payment_method,
   recurrence,
   series_id,
   updated_at,
@@ -564,6 +574,7 @@ function mapMovement(movement: RawFinancialMovement): FinancialMovementRecord {
     projectId: movement.project_id,
     projectName: movement.projects?.name ?? null,
     notes: movement.notes,
+    paymentMethod: movement.payment_method,
     recurrence: movement.recurrence,
     seriesId: movement.series_id,
     updatedAt: movement.updated_at,
@@ -638,6 +649,7 @@ function financialMovementPayload(input: CreateFinancialMovementInput) {
     client_id: optionalText(input.clientId),
     project_id: optionalText(input.projectId),
     notes: optionalText(input.notes),
+    payment_method: input.paymentMethod ?? null,
     recurrence: input.recurrence,
   }
 }
@@ -1038,6 +1050,306 @@ export async function deleteCredential(credentialId: string): Promise<void> {
     .from('credentials')
     .delete()
     .eq('id', credentialId)
+    .select('id')
+    .single()
+
+  if (error) throw error
+}
+
+export interface EnvFileRecord {
+  id: string
+  projectId: string
+  name: string
+  updatedAt: string
+}
+
+export interface SaveEnvFileInput {
+  id?: string
+  projectId?: string
+  name: string
+  content?: string
+}
+
+export async function listEnvFiles(projectId: string): Promise<EnvFileRecord[]> {
+  const { data, error } = await getClient()
+    .from('project_env_files')
+    .select('id, project_id, name, updated_at')
+    .eq('project_id', projectId)
+    .order('name', { ascending: true })
+
+  if (error) throw error
+  return data.map((file) => ({
+    id: file.id,
+    projectId: file.project_id,
+    name: file.name,
+    updatedAt: file.updated_at,
+  }))
+}
+
+export async function saveEnvFile(input: SaveEnvFileInput): Promise<void> {
+  await invokeFunction('save-env-file', { ...input })
+}
+
+export async function revealEnvFile(envFileId: string): Promise<{ content: string }> {
+  return invokeFunction('reveal-env-file', { id: envFileId })
+}
+
+export async function deleteEnvFile(envFileId: string): Promise<void> {
+  const { error } = await getClient()
+    .from('project_env_files')
+    .delete()
+    .eq('id', envFileId)
+    .select('id')
+    .single()
+
+  if (error) throw error
+}
+
+export interface PortalTokenRecord {
+  id: string
+  clientId: string
+  createdAt: string
+  lastAccessedAt: string | null
+}
+
+function randomToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+export async function getPortalToken(clientId: string): Promise<PortalTokenRecord | null> {
+  const { data, error } = await getClient()
+    .from('client_portal_tokens')
+    .select('id, client_id, created_at, last_accessed_at')
+    .eq('client_id', clientId)
+    .is('revoked_at', null)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) return null
+  return {
+    id: data.id,
+    clientId: data.client_id,
+    createdAt: data.created_at,
+    lastAccessedAt: data.last_accessed_at,
+  }
+}
+
+/**
+ * Enables (or regenerates) the portal link for a client. Revokes any active token and
+ * creates a new one. Returns the plain token — it is shown once and never stored.
+ */
+export async function enablePortal(clientId: string): Promise<string> {
+  const client = getClient()
+  const revokedAt = new Date().toISOString()
+
+  const { error: revokeError } = await client
+    .from('client_portal_tokens')
+    .update({ revoked_at: revokedAt })
+    .eq('client_id', clientId)
+    .is('revoked_at', null)
+
+  if (revokeError) throw revokeError
+
+  const token = randomToken()
+  const { error: insertError } = await client
+    .from('client_portal_tokens')
+    .insert({ client_id: clientId, token_hash: await sha256Hex(token) })
+    .select('id')
+    .single()
+
+  if (insertError) throw insertError
+  return token
+}
+
+export async function disablePortal(clientId: string): Promise<void> {
+  const { error } = await getClient()
+    .from('client_portal_tokens')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('client_id', clientId)
+    .is('revoked_at', null)
+    .select('id')
+
+  if (error) throw error
+}
+
+export type FeatureRequestStatus = Enums<'feature_request_status'>
+
+export interface FeatureRequestRecord {
+  id: string
+  title: string
+  description: string | null
+  status: FeatureRequestStatus
+  authorName: string | null
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  commentCount: number
+}
+
+export interface FeatureRequestCommentRecord {
+  id: string
+  featureRequestId: string
+  body: string
+  authorName: string | null
+  createdBy: string
+  createdAt: string
+}
+
+export interface CreateFeatureRequestInput {
+  title: string
+  description?: string
+}
+
+interface RawFeatureRequest {
+  id: string
+  title: string
+  description: string | null
+  status: FeatureRequestStatus
+  created_by: string
+  created_at: string
+  updated_at: string
+  feature_request_comments: { count: number }[]
+}
+
+interface RawFeatureRequestComment {
+  id: string
+  feature_request_id: string
+  body: string
+  created_by: string
+  created_at: string
+}
+
+export async function listFeatureRequests(): Promise<FeatureRequestRecord[]> {
+  const client = getClient()
+
+  const [requestsResult, profilesResult] = await Promise.all([
+    client
+      .from('feature_requests')
+      .select('id, title, description, status, created_by, created_at, updated_at, feature_request_comments(count)')
+      .order('created_at', { ascending: false })
+      .overrideTypes<RawFeatureRequest[], { merge: false }>(),
+    client.from('profiles').select('id, full_name'),
+  ])
+
+  if (requestsResult.error) throw requestsResult.error
+  if (profilesResult.error) throw profilesResult.error
+
+  const authorById = new Map(profilesResult.data.map((profile) => [profile.id, profile.full_name]))
+
+  return requestsResult.data.map((request) => ({
+    id: request.id,
+    title: request.title,
+    description: request.description,
+    status: request.status,
+    authorName: authorById.get(request.created_by) ?? null,
+    createdBy: request.created_by,
+    createdAt: request.created_at,
+    updatedAt: request.updated_at,
+    commentCount: request.feature_request_comments[0]?.count ?? 0,
+  }))
+}
+
+export async function listFeatureRequestComments(
+  featureRequestId: string,
+): Promise<FeatureRequestCommentRecord[]> {
+  const client = getClient()
+
+  const [commentsResult, profilesResult] = await Promise.all([
+    client
+      .from('feature_request_comments')
+      .select('id, feature_request_id, body, created_by, created_at')
+      .eq('feature_request_id', featureRequestId)
+      .order('created_at', { ascending: true })
+      .overrideTypes<RawFeatureRequestComment[], { merge: false }>(),
+    client.from('profiles').select('id, full_name'),
+  ])
+
+  if (commentsResult.error) throw commentsResult.error
+  if (profilesResult.error) throw profilesResult.error
+
+  const authorById = new Map(profilesResult.data.map((profile) => [profile.id, profile.full_name]))
+
+  return commentsResult.data.map((comment) => ({
+    id: comment.id,
+    featureRequestId: comment.feature_request_id,
+    body: comment.body,
+    authorName: authorById.get(comment.created_by) ?? null,
+    createdBy: comment.created_by,
+    createdAt: comment.created_at,
+  }))
+}
+
+export async function createFeatureRequest(input: CreateFeatureRequestInput): Promise<void> {
+  const { error } = await getClient().from('feature_requests').insert({
+    title: input.title.trim(),
+    description: optionalText(input.description),
+  })
+
+  if (error) throw error
+}
+
+export async function updateFeatureRequest(
+  featureRequestId: string,
+  input: CreateFeatureRequestInput,
+): Promise<void> {
+  const { error } = await getClient()
+    .from('feature_requests')
+    .update({ title: input.title.trim(), description: optionalText(input.description) })
+    .eq('id', featureRequestId)
+    .select('id')
+    .single()
+
+  if (error) throw error
+}
+
+export async function updateFeatureRequestStatus(
+  featureRequestId: string,
+  status: FeatureRequestStatus,
+): Promise<void> {
+  const { error } = await getClient()
+    .from('feature_requests')
+    .update({ status })
+    .eq('id', featureRequestId)
+    .select('id')
+    .single()
+
+  if (error) throw error
+}
+
+export async function deleteFeatureRequest(featureRequestId: string): Promise<void> {
+  const { error } = await getClient()
+    .from('feature_requests')
+    .delete()
+    .eq('id', featureRequestId)
+    .select('id')
+    .single()
+
+  if (error) throw error
+}
+
+export async function createFeatureRequestComment(
+  featureRequestId: string,
+  body: string,
+): Promise<void> {
+  const { error } = await getClient().from('feature_request_comments').insert({
+    feature_request_id: featureRequestId,
+    body: body.trim(),
+  })
+
+  if (error) throw error
+}
+
+export async function deleteFeatureRequestComment(commentId: string): Promise<void> {
+  const { error } = await getClient()
+    .from('feature_request_comments')
+    .delete()
+    .eq('id', commentId)
     .select('id')
     .single()
 

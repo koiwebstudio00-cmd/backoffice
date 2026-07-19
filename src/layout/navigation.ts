@@ -4,6 +4,7 @@ import {
   FolderKanban,
   KeyRound,
   LayoutDashboard,
+  Lightbulb,
   Users,
 } from 'lucide-react'
 
@@ -14,4 +15,5 @@ export const navigation = [
   { label: 'Finanzas', to: '/finanzas', icon: CircleDollarSign, ownerOnly: true },
   { label: 'Calendario', to: '/calendario', icon: CalendarDays, ownerOnly: false },
   { label: 'Credenciales', to: '/credenciales', icon: KeyRound, ownerOnly: true },
+  { label: 'Features', to: '/features', icon: Lightbulb, ownerOnly: false },
 ] as const
